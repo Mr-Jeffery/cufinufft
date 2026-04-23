@@ -21,13 +21,12 @@ NVCC ?= nvcc
 
 # Developer-users are suggested to optimize NVARCH in their own make.inc, see:
 #   http://arnon.dk/matching-sm-architectures-arch-and-gencode-for-various-nvidia-cards/
-NVARCH ?= -arch=sm_75 \
-	  -gencode=arch=compute_35,code=sm_35 \
-	  -gencode=arch=compute_50,code=sm_50 \
+NVARCH ?= -arch=sm_89 \
 	  -gencode=arch=compute_60,code=sm_60 \
 	  -gencode=arch=compute_70,code=sm_70 \
 	  -gencode=arch=compute_75,code=sm_75 \
-	  -gencode=arch=compute_75,code=compute_75
+	  -gencode=arch=compute_89,code=sm_89 \
+	  -gencode=arch=compute_89,code=compute_89
 
 CFLAGS    ?= -fPIC -O3 -funroll-loops -march=native
 CXXFLAGS  ?= $(CFLAGS) -std=c++14
@@ -43,9 +42,22 @@ NVCCFLAGS ?= -std=c++14 -ccbin=$(CXX) -O3 $(NVARCH) -Wno-deprecated-gpu-targets 
 # CUDA_DIR environment variable. If neither (CUDA_ROOT, nor CUDA_DIR) is set,
 # CUDA_ROOT defaults to /usr/local/cuda
 ifeq ($(CUDA_DIR),)
-    CUDA_ROOT ?= /usr/local/cuda
+	ifdef CUDA_ROOT
+		# Keep user-provided CUDA_ROOT as-is.
+	else
+		NVCC_PATH := $(shell command -v $(NVCC) 2>/dev/null)
+		ifneq ($(NVCC_PATH),)
+			CUDA_ROOT := $(abspath $(dir $(NVCC_PATH))/..)
+		else
+			CUDA_ROOT := /usr/local/cuda
+		endif
+	endif
 else
     CUDA_ROOT := $(CUDA_DIR)
+endif
+
+ifeq ($(wildcard $(CUDA_ROOT)/include/cuComplex.h),)
+	$(warning Could not find $(CUDA_ROOT)/include/cuComplex.h; set CUDA_DIR to your CUDA install root)
 endif
 
 # Common includes
@@ -61,7 +73,10 @@ ifdef NVCC_STUBS
     NVCC_LIBS_PATH += -L$(NVCC_STUBS)
 endif
 
-LIBS += -lm -lcudart -lstdc++ -lnvToolsExt -lcufft -lcuda
+LIBS += -lm -lcudart -lstdc++ -lcufft -lcuda
+ifneq ($(wildcard $(CUDA_ROOT)/lib64/libnvToolsExt.so),)
+	LIBS += -lnvToolsExt
+endif
 
 
 #############################################################
@@ -120,6 +135,7 @@ internaltest: spreadtest fserieskertest
 
 # testers for the lib (does not execute)
 libtest: lib $(BINDIR)/cufinufft2d1_test \
+	$(BINDIR)/cufinufft2d1_binmtx_test \
 	$(BINDIR)/cufinufft2d2_test \
 	$(BINDIR)/cufinufft2d1many_test \
 	$(BINDIR)/cufinufft2d2many_test \
