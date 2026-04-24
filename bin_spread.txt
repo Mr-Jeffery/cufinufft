@@ -1,0 +1,9 @@
+[input ] loaded 125444 COO entries from ../benzene/benzene.mtx (8219x8219, field=real, symmetry=symmetric)
+[time  ] dummy warmup call to CUFFT	 0.00336 s
+[time  ] cufinufft plan:		 0.505 s
+[time  ] cufinufft setNUpts:		 0.000399 s
+[time  ] cufinufft exec:		 1.71 s
+[time  ] cufinufft destroy:		 0.315 s
+[Method 1] 125444 NU pts to 67551961 U pts in 2.53 s:      4.95e+04 NU pts/s
+					(exec-only thoughput: 7.33e+04 NU pts/s)
+[gpu   ] one mode: rel err in F[3041,2136] is 4.18e-15
