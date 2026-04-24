@@ -87,6 +87,9 @@ __global__
 void Spread_2d_NUptsdriven(FLT *x, FLT *y, CUCPX *c, CUCPX *fw, int M, const int ns,
 		int nf1, int nf2, FLT es_c, FLT es_beta, int* idxnupts, int pirange);
 __global__
+void Spread_2d_NUptsdriven_Bin(FLT *x, FLT *y, CUCPX *c, CUCPX *fw, int M, const int ns,
+		int nf1, int nf2, FLT es_c, FLT es_beta, int* idxnupts, int pirange);
+__global__
 void Spread_2d_NUptsdriven_Horner(FLT *x, FLT *y, CUCPX *c, CUCPX *fw, int M,
 	const int ns, int nf1, int nf2, FLT sigma, int* idxnupts, int pirange);
 

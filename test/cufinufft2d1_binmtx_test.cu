@@ -212,14 +212,14 @@ int main(int argc, char* argv[])
 	CPX *c, *fk;
 	cudaMallocHost(&x, M*sizeof(FLT));
 	cudaMallocHost(&y, M*sizeof(FLT));
-	cudaMallocHost(&c, M*sizeof(CPX)); // to be removed for binary matrix, since we won't have c values
+	// cudaMallocHost(&c, M*sizeof(CPX)); // to be removed for binary matrix, since we won't have c values
 	cudaMallocHost(&fk,N1*N2*sizeof(CPX));
 
 	FLT *d_x, *d_y;
 	CUCPX *d_c, *d_fk;
 	checkCudaErrors(cudaMalloc(&d_x,M*sizeof(FLT)));
 	checkCudaErrors(cudaMalloc(&d_y,M*sizeof(FLT)));
-	checkCudaErrors(cudaMalloc(&d_c,M*sizeof(CUCPX))); // to be removed for binary matrix, since we won't have c values
+	// checkCudaErrors(cudaMalloc(&d_c,M*sizeof(CUCPX))); // to be removed for binary matrix, since we won't have c values
 	checkCudaErrors(cudaMalloc(&d_fk,N1*N2*sizeof(CUCPX)));
 
 	// Making data: either random synthetic points or Matrix Market COO-derived points.
@@ -227,7 +227,7 @@ int main(int argc, char* argv[])
 		if (use_mtx) {
 			x[i] = (FLT)(-M_PI + (2.0 * M_PI * (double)mtx_rows[i]) / (double)N1);
 			y[i] = (FLT)(-M_PI + (2.0 * M_PI * (double)mtx_cols[i]) / (double)N2);
-			c[i] = CPX((FLT)1.0, (FLT)0.0); // to be removed for binary matrix, since we won't have c values
+			// c[i] = CPX((FLT)1.0, (FLT)0.0); // to be removed for binary matrix, since we won't have c values
 		} else {
 			x[i] = M_PI*randm11();// x in [-pi,pi)
 			y[i] = M_PI*randm11();
@@ -238,7 +238,7 @@ int main(int argc, char* argv[])
 
 	checkCudaErrors(cudaMemcpy(d_x,x,M*sizeof(FLT),cudaMemcpyHostToDevice));
 	checkCudaErrors(cudaMemcpy(d_y,y,M*sizeof(FLT),cudaMemcpyHostToDevice));
-	checkCudaErrors(cudaMemcpy(d_c,c,M*sizeof(CUCPX),cudaMemcpyHostToDevice)); // to be removed for binary matrix, since we won't have c values
+	// checkCudaErrors(cudaMemcpy(d_c,c,M*sizeof(CUCPX),cudaMemcpyHostToDevice)); // to be removed for binary matrix, since we won't have c values
 
 	cudaEvent_t start, stop;
 	float milliseconds = 0;
@@ -350,18 +350,18 @@ int main(int argc, char* argv[])
 	int nt1 = (int)(0.37*N1), nt2 = (int)(0.26*N2);  // choose some mode index to check
 	CPX Ft = CPX(0,0), J = IMA*(FLT)iflag;
 	for (int j=0; j<M; ++j)
-		Ft += c[j] * exp(J*(nt1*x[j]+nt2*y[j]));   // crude direct
+		Ft += (c == nullptr ? CPX(1.0, 0.0) : c[j]) * exp(J*(nt1*x[j]+nt2*y[j]));   // crude direct
 	int it = N1/2+nt1 + N1*(N2/2+nt2);   // index in complex F as 1d array
 //	printf("[gpu   ] one mode: abs err in F[%ld,%ld] is %.3g\n",(int)nt1,(int)nt2,abs(Ft-fk[it]));
 	printf("[gpu   ] one mode: rel err in F[%ld,%ld] is %.3g\n",(int)nt1,(int)nt2,abs(Ft-fk[it])/infnorm(N,fk));
 
 	cudaFreeHost(x);
 	cudaFreeHost(y);
-	cudaFreeHost(c);
+	// cudaFreeHost(c);
 	cudaFreeHost(fk);
 	cudaFree(d_x);
 	cudaFree(d_y);
-	cudaFree(d_c);
+	// cudaFree(d_c);
 	cudaFree(d_fk);
 	return 0;
 }

@@ -39,7 +39,7 @@ int CUFINUFFT2D1_EXEC(CUCPX* d_c, CUCPX* d_fk, CUFINUFFT_PLAN d_plan)
 	for(int i=0; i*d_plan->maxbatchsize < d_plan->ntransf; i++){
 		blksize = min(d_plan->ntransf - i*d_plan->maxbatchsize, 
 			d_plan->maxbatchsize);
-		d_cstart   = d_c + i*d_plan->maxbatchsize*d_plan->M;
+		d_cstart   = d_c == nullptr ? nullptr : d_c + i*d_plan->maxbatchsize*d_plan->M; // d_c being nullptr indicates that we are doing a "bin matrix" method, where we don't need to read in the nonuniform points or the coefficients, so we can skip directly to spreading with dummy inputs
 		d_fkstart  = d_fk + i*d_plan->maxbatchsize*d_plan->ms*d_plan->mt;
 		d_plan->c  = d_cstart;
 		d_plan->fk = d_fkstart;
