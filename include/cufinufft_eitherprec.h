@@ -273,6 +273,8 @@ typedef struct CUFINUFFT_PLAN_S {
 	CUCPX *c;
 	CUCPX *fw;
 	CUCPX *fk;
+	FLT *fw_real;
+	CUCPX *fw_half;
 
 	// Arrays that used in subprob method
 	int *idxnupts;//length: #nupts, index of the nupts in the bin-sorted order
@@ -292,6 +294,7 @@ typedef struct CUFINUFFT_PLAN_S {
 	int *subprob_to_nupts;
 
 	cufftHandle fftplan;
+	cufftHandle fftplan_real;
 	cudaStream_t *streams;
 
 } CUFINUFFT_PLAN_S;

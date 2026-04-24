@@ -89,6 +89,11 @@ void Spread_2d_NUptsdriven(FLT *x, FLT *y, CUCPX *c, CUCPX *fw, int M, const int
 __global__
 void Spread_2d_NUptsdriven_Bin(FLT *x, FLT *y, CUCPX *c, CUCPX *fw, int M, const int ns,
 		int nf1, int nf2, FLT es_c, FLT es_beta, int* idxnupts, int pirange);
+#ifdef BINMTX_REAL_FFT
+__global__
+void Spread_2d_NUptsdriven_Bin_Real(FLT *x, FLT *y, FLT *fw, int M, const int ns,
+		int nf1, int nf2, FLT es_c, FLT es_beta, int* idxnupts, int pirange);
+#endif
 __global__
 void Spread_2d_NUptsdriven_Horner(FLT *x, FLT *y, CUCPX *c, CUCPX *fw, int M,
 	const int ns, int nf1, int nf2, FLT sigma, int* idxnupts, int pirange);

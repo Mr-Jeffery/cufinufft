@@ -235,6 +235,14 @@ int ALLOCGPUMEM2D_PLAN(CUFINUFFT_PLAN d_plan)
 				sizeof(CUCPX)));
 		checkCudaErrors(cudaMalloc(&d_plan->fwkerhalf1,(nf1/2+1)*sizeof(FLT)));
 		checkCudaErrors(cudaMalloc(&d_plan->fwkerhalf2,(nf2/2+1)*sizeof(FLT)));
+		#ifdef BINMTX_REAL_FFT
+		if (d_plan->type == 1) {
+			checkCudaErrors(cudaMalloc(&d_plan->fw_real,
+				maxbatchsize * nf1 * nf2 * sizeof(FLT)));
+			checkCudaErrors(cudaMalloc(&d_plan->fw_half,
+				maxbatchsize * nf2 * (nf1 / 2 + 1) * sizeof(CUCPX)));
+		}
+		#endif
 	}
 
 	cudaStream_t* streams =(cudaStream_t*) malloc(d_plan->opts.gpu_nstreams*
@@ -307,6 +315,10 @@ void FREEGPUMEMORY2D(CUFINUFFT_PLAN d_plan)
 		checkCudaErrors(cudaFree(d_plan->fw));
 		checkCudaErrors(cudaFree(d_plan->fwkerhalf1));
 		checkCudaErrors(cudaFree(d_plan->fwkerhalf2));
+		#ifdef BINMTX_REAL_FFT
+		if (d_plan->fw_real) checkCudaErrors(cudaFree(d_plan->fw_real));
+		if (d_plan->fw_half) checkCudaErrors(cudaFree(d_plan->fw_half));
+		#endif
 	}
 	switch(d_plan->opts.gpu_method)
 	{

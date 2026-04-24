@@ -25,6 +25,8 @@
 #undef CUCPX
 #undef CUFFT_TYPE
 #undef CUFFT_EX
+#undef CUFFT_TYPE_REAL
+#undef CUFFT_EX_REAL
 #undef SET_NF_TYPE12
 
 // Compile-flag choice of single or double (default) precision:
@@ -33,19 +35,23 @@
   // machine epsilon for rounding
   #define EPSILON (float)6e-08
   #define IMA complex<float>(0.0,1.0)
-  #define FABS(x) fabs(x)
+  #define FABS(x) fabsf(x)
   #define CUCPX cuFloatComplex
   #define CUFFT_TYPE CUFFT_C2C
   #define CUFFT_EX cufftExecC2C
+  #define CUFFT_TYPE_REAL CUFFT_R2C
+  #define CUFFT_EX_REAL cufftExecR2C
   #define SET_NF_TYPE12 set_nf_type12f
 #else
   // machine epsilon for rounding
   #define EPSILON (double)1.1e-16
   #define IMA complex<double>(0.0,1.0)
-  #define FABS(x) fabsf(x)
+  #define FABS(x) fabs(x)
   #define CUCPX cuDoubleComplex
   #define CUFFT_TYPE CUFFT_Z2Z
   #define CUFFT_EX cufftExecZ2Z
+  #define CUFFT_TYPE_REAL CUFFT_D2Z
+  #define CUFFT_EX_REAL cufftExecD2Z
   #define SET_NF_TYPE12 set_nf_type12
 #endif
 

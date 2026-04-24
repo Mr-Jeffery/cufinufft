@@ -33,6 +33,13 @@ CXXFLAGS  ?= $(CFLAGS) -std=c++14
 NVCCFLAGS ?= -std=c++14 -ccbin=$(CXX) -O3 $(NVARCH) -Wno-deprecated-gpu-targets \
 	     --default-stream per-thread -Xcompiler "$(CXXFLAGS)"
 
+BINMTX_REAL_FFT ?= 0
+ifeq ($(BINMTX_REAL_FFT),1)
+	CFLAGS += -DBINMTX_REAL_FFT
+	CXXFLAGS += -DBINMTX_REAL_FFT
+	NVCCFLAGS += -DBINMTX_REAL_FFT
+endif
+
 # For debugging, tell nvcc to add symbols to host and device code respectively,
 #NVCCFLAGS+= -g -G
 # and enable cufinufft internal flags.
@@ -136,6 +143,7 @@ internaltest: spreadtest fserieskertest
 # testers for the lib (does not execute)
 libtest: lib $(BINDIR)/cufinufft2d1_test \
 	$(BINDIR)/cufinufft2d1_binmtx_test \
+	$(BINDIR)/cufinufft2d1_binmtx_test_32 \
 	$(BINDIR)/cufinufft2d2_test \
 	$(BINDIR)/cufinufft2d1many_test \
 	$(BINDIR)/cufinufft2d2many_test \
