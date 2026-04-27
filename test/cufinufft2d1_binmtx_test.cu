@@ -220,6 +220,7 @@ int main(int argc, char* argv[])
 	checkCudaErrors(cudaMalloc(&d_x,M*sizeof(FLT)));
 	checkCudaErrors(cudaMalloc(&d_y,M*sizeof(FLT)));
 	// checkCudaErrors(cudaMalloc(&d_c,M*sizeof(CUCPX))); // to be removed for binary matrix, since we won't have c values
+	d_c = nullptr; // binary matrix: no coefficients
 	checkCudaErrors(cudaMalloc(&d_fk,N1*N2*sizeof(CUCPX)));
 
 	// Making data: either random synthetic points or Matrix Market COO-derived points.

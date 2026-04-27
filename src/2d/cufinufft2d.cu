@@ -75,15 +75,8 @@ int CUFINUFFT2D1_EXEC(CUCPX* d_c, CUCPX* d_fk, CUFINUFFT_PLAN d_plan)
 		d_plan->fk = d_fkstart;
 
 		#ifdef BINMTX_REAL_FFT
-		const bool use_real_binfft = (d_c == nullptr && d_plan->fftplan_real &&
-			d_plan->fw_real && d_plan->fw_half);
-		if (use_real_binfft) {
-			checkCudaErrors(cudaMemset(d_plan->fw_real, 0,
-				blksize * d_plan->nf1 * d_plan->nf2 * sizeof(FLT)));
-		} else {
-			checkCudaErrors(cudaMemset(d_plan->fw, 0,
-				blksize * d_plan->nf1 * d_plan->nf2 * sizeof(CUCPX)));
-		}
+		checkCudaErrors(cudaMemset(d_plan->fw_real, 0,
+			blksize * d_plan->nf1 * d_plan->nf2 * sizeof(FLT)));
 		#else
 		checkCudaErrors(cudaMemset(d_plan->fw,0,blksize*
 					d_plan->nf1*d_plan->nf2*sizeof(CUCPX)));// this is needed
@@ -113,18 +106,14 @@ int CUFINUFFT2D1_EXEC(CUCPX* d_c, CUCPX* d_fk, CUFINUFFT_PLAN d_plan)
 		// Step 2: FFT
 		cudaEventRecord(start);
 		#ifdef BINMTX_REAL_FFT
-		if (use_real_binfft) {
-			int nfull = blksize * d_plan->nf1 * d_plan->nf2;
-			int nf1h = d_plan->nf1 / 2 + 1;
-			int nthreads = 256;
-			int nblocks_full = (nfull + nthreads - 1) / nthreads;
+		int nfull = blksize * d_plan->nf1 * d_plan->nf2;
+		int nf1h = d_plan->nf1 / 2 + 1;
+		int nthreads = 256;
+		int nblocks_full = (nfull + nthreads - 1) / nthreads;
 
-			CUFFT_EX_REAL(d_plan->fftplan_real, d_plan->fw_real, d_plan->fw_half);
-			expand_hermitian_2d<<<nblocks_full, nthreads>>>(d_plan->fw_half, d_plan->fw,
-				d_plan->nf1, d_plan->nf2 * blksize, nf1h);
-		} else {
-			CUFFT_EX(d_plan->fftplan, d_plan->fw, d_plan->fw, d_plan->iflag);
-		}
+		CUFFT_EX_REAL(d_plan->fftplan_real, d_plan->fw_real, d_plan->fw_half);
+		expand_hermitian_2d<<<nblocks_full, nthreads>>>(d_plan->fw_half, d_plan->fw,
+			d_plan->nf1, d_plan->nf2 * blksize, nf1h);
 		#else
 		CUFFT_EX(d_plan->fftplan, d_plan->fw, d_plan->fw, d_plan->iflag);
 		#endif

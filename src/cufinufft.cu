@@ -211,6 +211,16 @@ This performs:
 	cudaEventRecord(start);
 	cufftHandle fftplan;
 	cufftHandle fftplan_real = 0;
+#ifdef BINMTX_REAL_FFT
+	int n_real[] = {nf2, nf1};
+	int inembed_real[] = {nf2, nf1};
+	int onembed_real[] = {nf2, nf1 / 2 + 1};
+	cufftPlanMany(&fftplan_real, 2, n_real,
+		inembed_real, 1, nf1 * nf2,
+		onembed_real, 1, (nf1/2+1) * nf2,
+		CUFFT_TYPE_REAL, maxbatchsize);
+	d_plan->fftplan_real = fftplan_real;
+#else
 	switch(d_plan->dim)
 	{
 		case 1:
@@ -243,18 +253,7 @@ This performs:
 		break;
 	}
 	d_plan->fftplan = fftplan;
-	#ifdef BINMTX_REAL_FFT
-	if (!d_plan->opts.gpu_spreadinterponly && d_plan->dim == 2 && d_plan->type == 1) {
-		int n[] = {nf2, nf1};
-		int inembed[] = {nf2, nf1};
-		int onembed[] = {nf2, nf1 / 2 + 1};
-		cufftPlanMany(&fftplan_real, 2, n,
-			inembed, 1, inembed[0] * inembed[1],
-			onembed, 1, onembed[0] * onembed[1],
-			CUFFT_TYPE_REAL, maxbatchsize);
-		d_plan->fftplan_real = fftplan_real;
-	}
-	#endif
+#endif
 #ifdef TIME
 	cudaEventRecord(stop);
 	cudaEventSynchronize(stop);
