@@ -142,6 +142,8 @@ internaltest: spreadtest fserieskertest
 
 # testers for the lib (does not execute)
 libtest: lib $(BINDIR)/cufinufft2d1_test \
+	$(BINDIR)/cufft_dense2d_test \
+	$(BINDIR)/cufft_dense2d_test_32 \
 	$(BINDIR)/cufinufft2d1_binmtx_test \
 	$(BINDIR)/cufinufft2d1_binmtx_test_32 \
 	$(BINDIR)/cufinufft2d2_test \
@@ -191,6 +193,14 @@ $(BINDIR)/example%: examples/example%.cpp $(DYNAMICLIB) $(HEADERS)
 $(BINDIR)/cufinufft2d2api_test%: test/cufinufft2d2api_test%.o $(DYNAMICLIB)
 	mkdir -p $(BINDIR)
 	$(NVCC) $(NVCCFLAGS) $(LIBS) -o $@ $< $(DYNAMICLIB)
+
+$(BINDIR)/cufft_dense2d_test: test/cufft_dense2d_test.cu contrib/utils.o
+	mkdir -p $(BINDIR)
+	$(NVCC) $(NVCCFLAGS) $(INC) $(NVCC_LIBS_PATH) $(LIBS) -o $@ $< contrib/utils.o
+
+$(BINDIR)/cufft_dense2d_test_32: test/cufft_dense2d_test.cu contrib/utils.o
+	mkdir -p $(BINDIR)
+	$(NVCC) -DSINGLE $(NVCCFLAGS) $(INC) $(NVCC_LIBS_PATH) $(LIBS) -o $@ $< contrib/utils.o
 
 $(BINDIR)/%_32: test/%_32.o $(CUFINUFFTOBJS_32) $(CUFINUFFTOBJS)
 	mkdir -p $(BINDIR)

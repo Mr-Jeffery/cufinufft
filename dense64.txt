@@ -1,0 +1,14 @@
+[time  ] file load:		 5.75 s
+[input ] loaded 67551961 dense entries from ../benzene/benzene_dense_real.mtx (8219x8219, format=dense-real-rowmajor+header)
+[input ] fft grid: 17280x17280
+[input ] nonzero entries: 125444
+[time  ] dummy warmup call to CUFFT	 0.00328 s
+[time  ] host/device setup:	 1.97 s
+[time  ] cufft plan:		 0.557 s
+[time  ] cufft setUpts:		 0.508 s
+[time  ] cufft exec:		 1.04 s
+[time  ] cufft destroy:		 0.189 s
+[time  ] cuda memcpy d2h:		 0.488 s
+[Method 0] 125444 NU pts to 298598400 U pts in 10.5 s:      1.19e+04 NU pts/s
+					(exec-only thoughput: 1.21e+05 NU pts/s)
+[gpu   ] one mode: rel err in F[3041,2136] is 2.36e-12

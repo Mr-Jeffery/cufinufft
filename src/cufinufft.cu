@@ -210,8 +210,8 @@ This performs:
 
 	cudaEventRecord(start);
 	cufftHandle fftplan;
-	cufftHandle fftplan_real = 0;
 #ifdef BINMTX_REAL_FFT
+	cufftHandle fftplan_real = 0;
 	int n_real[] = {nf2, nf1};
 	int inembed_real[] = {nf2, nf1};
 	int onembed_real[] = {nf2, nf1 / 2 + 1};

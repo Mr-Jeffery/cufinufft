@@ -1,5 +1,6 @@
 #include <iostream>
 #include <iomanip>
+#include <chrono>
 #include <math.h>
 #include <helper_cuda.h>
 #include <complex>
@@ -126,6 +127,8 @@ int main(int argc, char* argv[])
 	int method;
 	sscanf(argv[1],"%d",&method);
 
+	float totaltime = 0;
+
 	FLT tol=1e-6;
 	bool use_mtx = false;
 	string mtx_path;
@@ -169,10 +172,15 @@ int main(int argc, char* argv[])
 	}
 
 	if (use_mtx) {
+		auto load_start = chrono::high_resolution_clock::now();
 		int file_n1 = 0, file_n2 = 0;
 		int ier_load = load_matrix_market_rows_cols(
 				mtx_path, file_n1, file_n2, mtx_rows, mtx_cols, mtx_field, mtx_symmetry);
 		if (ier_load != 0) return ier_load;
+		auto load_end = chrono::high_resolution_clock::now();
+		float load_ms = (float)chrono::duration_cast<chrono::microseconds>(load_end - load_start).count() / 1000.0f;
+		totaltime += load_ms;
+		printf("[time  ] file load:\t\t %.3g s\n", load_ms / 1000.0f);
 
 		if (N1 == 0 && N2 == 0) {
 			N1 = file_n1;
@@ -206,8 +214,11 @@ int main(int argc, char* argv[])
 
 	cout<<scientific<<setprecision(3);
 	int ier;
+	cudaEvent_t start, stop;
+	float milliseconds = 0;
 
 
+	auto setup_start = chrono::high_resolution_clock::now();
 	FLT *x, *y;
 	CPX *c, *fk;
 	cudaMallocHost(&x, M*sizeof(FLT));
@@ -240,10 +251,11 @@ int main(int argc, char* argv[])
 	checkCudaErrors(cudaMemcpy(d_x,x,M*sizeof(FLT),cudaMemcpyHostToDevice));
 	checkCudaErrors(cudaMemcpy(d_y,y,M*sizeof(FLT),cudaMemcpyHostToDevice));
 	// checkCudaErrors(cudaMemcpy(d_c,c,M*sizeof(CUCPX),cudaMemcpyHostToDevice)); // to be removed for binary matrix, since we won't have c values
+	auto setup_end = chrono::high_resolution_clock::now();
+	float setup_ms = (float)chrono::duration_cast<chrono::microseconds>(setup_end - setup_start).count() / 1000.0f;
+	totaltime += setup_ms;
+	printf("[time  ] host/device setup:\t %.3g s\n", setup_ms / 1000.0f);
 
-	cudaEvent_t start, stop;
-	float milliseconds = 0;
-	float totaltime = 0;
 	cudaEventCreate(&start);
 	cudaEventCreate(&stop);
 
@@ -293,6 +305,7 @@ int main(int argc, char* argv[])
 	cudaEventElapsedTime(&milliseconds, start, stop);
 	totaltime += milliseconds;
 	printf("[time  ] cufinufft plan:\t\t %.3g s\n", milliseconds/1000);
+	printf("[plan  ] nf1=%d nf2=%d\n", dplan->nf1, dplan->nf2);
 
 
 	cudaEventRecord(start);
@@ -341,20 +354,24 @@ int main(int argc, char* argv[])
 	totaltime += milliseconds;
 	printf("[time  ] cufinufft destroy:\t\t %.3g s\n", milliseconds/1000);
 
+	auto d2h_start = chrono::high_resolution_clock::now();
 	checkCudaErrors(cudaMemcpy(fk,d_fk,N1*N2*sizeof(CUCPX),
 		cudaMemcpyDeviceToHost));
-
-	printf("[Method %d] %d NU pts to %d U pts in %.3g s:      %.3g NU pts/s\n",
-			opts.gpu_method,M,N1*N2,totaltime/1000,M/totaltime*1000);
-	printf("\t\t\t\t\t(exec-only thoughput: %.3g NU pts/s)\n",M/exec_ms*1000);
+	auto d2h_end = chrono::high_resolution_clock::now();
+	float d2h_ms = (float)chrono::duration_cast<chrono::microseconds>(d2h_end - d2h_start).count() / 1000.0f;
+	totaltime += d2h_ms;
+	printf("[time  ] cuda memcpy d2h:\t %.3g s\n", d2h_ms / 1000.0f);
 
 	int nt1 = (int)(0.37*N1), nt2 = (int)(0.26*N2);  // choose some mode index to check
 	CPX Ft = CPX(0,0), J = IMA*(FLT)iflag;
 	for (int j=0; j<M; ++j)
 		Ft += (c == nullptr ? CPX(1.0, 0.0) : c[j]) * exp(J*(nt1*x[j]+nt2*y[j]));   // crude direct
+	printf("[Method %d] %d NU pts to %d U pts in %.3g s:      %.3g NU pts/s\n",
+			opts.gpu_method,M,N1*N2,totaltime/1000,M/totaltime*1000);
+	printf("\t\t\t\t\t(exec-only thoughput: %.3g NU pts/s)\n",M/exec_ms*1000);
 	int it = N1/2+nt1 + N1*(N2/2+nt2);   // index in complex F as 1d array
 //	printf("[gpu   ] one mode: abs err in F[%ld,%ld] is %.3g\n",(int)nt1,(int)nt2,abs(Ft-fk[it]));
-	printf("[gpu   ] one mode: rel err in F[%ld,%ld] is %.3g\n",(int)nt1,(int)nt2,abs(Ft-fk[it])/infnorm(N,fk));
+	printf("[gpu   ] one mode: rel err in F[%d,%d] is %.3g\n",(int)nt1,(int)nt2,abs(Ft-fk[it])/infnorm(N,fk));
 
 	cudaFreeHost(x);
 	cudaFreeHost(y);

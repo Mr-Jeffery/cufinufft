@@ -72,7 +72,6 @@ void Spread_2d_NUptsdriven_Bin(FLT *x, FLT *y, CUCPX *c, CUCPX *fw, int M,
 
 	FLT x_rescaled, y_rescaled;
 	FLT kervalue1, kervalue2;
-	const CUCPX cnow = CUCPX({1.0, 0.0});
 
 	assert(c == nullptr); // this kernel is only for testing spreading with binmtx, so c should be null and all values in fw should be added by 1.0
 	for(int i=blockDim.x*blockIdx.x+threadIdx.x; i<M; i+=blockDim.x*gridDim.x){
@@ -95,8 +94,7 @@ void Spread_2d_NUptsdriven_Bin(FLT *x, FLT *y, CUCPX *c, CUCPX *fw, int M,
 				outidx = ix+iy*nf1;
 				kervalue1=ker1[xx-xstart];
 				kervalue2=ker2[yy-ystart];
-				atomicAdd(&fw[outidx].x, cnow.x*kervalue1*kervalue2);
-				atomicAdd(&fw[outidx].y, cnow.y*kervalue1*kervalue2);
+				atomicAdd(&fw[outidx].x, kervalue1*kervalue2);
 			}
 		}
 

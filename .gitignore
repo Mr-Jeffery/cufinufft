@@ -1,5 +1,5 @@
 *.o
-*.txt
+# *.txt
 __pycache__
 bin
 lib
