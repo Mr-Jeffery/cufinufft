@@ -7,6 +7,19 @@
 
 using namespace std;
 
+static int select_valid_cuda_device(int requested)
+{
+	int ndev = 0;
+	if (cudaGetDeviceCount(&ndev) != cudaSuccess || ndev <= 0)
+		return 0;
+	if (requested >= 0 && requested < ndev)
+		return requested;
+	int cur = 0;
+	if (cudaGetDevice(&cur) == cudaSuccess && cur >= 0 && cur < ndev)
+		return cur;
+	return 0;
+}
+
 int ALLOCGPUMEM1D_PLAN(CUFINUFFT_PLAN d_plan)
 /*
 	wrapper for gpu memory allocation in "plan" stage.
@@ -17,7 +30,7 @@ int ALLOCGPUMEM1D_PLAN(CUFINUFFT_PLAN d_plan)
 	// Mult-GPU support: set the CUDA Device ID:
 	int orig_gpu_device_id;
 	cudaGetDevice(& orig_gpu_device_id);
-	cudaSetDevice(d_plan->opts.gpu_device_id);
+	cudaSetDevice(select_valid_cuda_device(d_plan->opts.gpu_device_id));
 
 	int nf1 = d_plan->nf1;
 	int maxbatchsize = d_plan->maxbatchsize;
@@ -53,7 +66,7 @@ int ALLOCGPUMEM1D_PLAN(CUFINUFFT_PLAN d_plan)
 	}
 
 	// Multi-GPU support: reset the device ID
-	cudaSetDevice(orig_gpu_device_id);
+	cudaSetDevice(select_valid_cuda_device(orig_gpu_device_id));
 	return 0;
 }
 
@@ -67,7 +80,7 @@ int ALLOCGPUMEM1D_NUPTS(CUFINUFFT_PLAN d_plan)
 	// Mult-GPU support: set the CUDA Device ID:
 	int orig_gpu_device_id;
 	cudaGetDevice(& orig_gpu_device_id);
-	cudaSetDevice(d_plan->opts.gpu_device_id);
+	cudaSetDevice(select_valid_cuda_device(d_plan->opts.gpu_device_id));
 
 	int M = d_plan->M;
 
@@ -95,7 +108,7 @@ int ALLOCGPUMEM1D_NUPTS(CUFINUFFT_PLAN d_plan)
 	}
 
 	// Multi-GPU support: reset the device ID
-	cudaSetDevice(orig_gpu_device_id);
+	cudaSetDevice(select_valid_cuda_device(orig_gpu_device_id));
 
 	return 0;
 }
@@ -110,7 +123,7 @@ void FREEGPUMEMORY1D(CUFINUFFT_PLAN d_plan)
 	// Mult-GPU support: set the CUDA Device ID:
 	int orig_gpu_device_id;
 	cudaGetDevice(& orig_gpu_device_id);
-	cudaSetDevice(d_plan->opts.gpu_device_id);
+	cudaSetDevice(select_valid_cuda_device(d_plan->opts.gpu_device_id));
 
 	if(!d_plan->opts.gpu_spreadinterponly){
 		checkCudaErrors(cudaFree(d_plan->fw));
@@ -144,7 +157,7 @@ void FREEGPUMEMORY1D(CUFINUFFT_PLAN d_plan)
 	}
 
 	// Multi-GPU support: reset the device ID
-	cudaSetDevice(orig_gpu_device_id);
+	cudaSetDevice(select_valid_cuda_device(orig_gpu_device_id));
 }
 
 int ALLOCGPUMEM2D_PLAN(CUFINUFFT_PLAN d_plan)
@@ -157,7 +170,7 @@ int ALLOCGPUMEM2D_PLAN(CUFINUFFT_PLAN d_plan)
         // Mult-GPU support: set the CUDA Device ID:
         int orig_gpu_device_id;
         cudaGetDevice(& orig_gpu_device_id);
-        cudaSetDevice(d_plan->opts.gpu_device_id);
+        cudaSetDevice(select_valid_cuda_device(d_plan->opts.gpu_device_id));
 
 	int nf1 = d_plan->nf1;
 	int nf2 = d_plan->nf2;
@@ -222,6 +235,14 @@ int ALLOCGPUMEM2D_PLAN(CUFINUFFT_PLAN d_plan)
 				sizeof(CUCPX)));
 		checkCudaErrors(cudaMalloc(&d_plan->fwkerhalf1,(nf1/2+1)*sizeof(FLT)));
 		checkCudaErrors(cudaMalloc(&d_plan->fwkerhalf2,(nf2/2+1)*sizeof(FLT)));
+		#ifdef BINMTX_REAL_FFT
+		if (d_plan->type == 1) {
+			checkCudaErrors(cudaMalloc(&d_plan->fw_real,
+				maxbatchsize * nf1 * nf2 * sizeof(FLT)));
+			checkCudaErrors(cudaMalloc(&d_plan->fw_half,
+				maxbatchsize * nf2 * (nf1 / 2 + 1) * sizeof(CUCPX)));
+		}
+		#endif
 	}
 
 	cudaStream_t* streams =(cudaStream_t*) malloc(d_plan->opts.gpu_nstreams*
@@ -231,7 +252,7 @@ int ALLOCGPUMEM2D_PLAN(CUFINUFFT_PLAN d_plan)
 	d_plan->streams = streams;
 
         // Multi-GPU support: reset the device ID
-        cudaSetDevice(orig_gpu_device_id);
+        cudaSetDevice(select_valid_cuda_device(orig_gpu_device_id));
 	return 0;
 }
 
@@ -245,7 +266,7 @@ int ALLOCGPUMEM2D_NUPTS(CUFINUFFT_PLAN d_plan)
         // Mult-GPU support: set the CUDA Device ID:
         int orig_gpu_device_id;
         cudaGetDevice(& orig_gpu_device_id);
-        cudaSetDevice(d_plan->opts.gpu_device_id);
+        cudaSetDevice(select_valid_cuda_device(d_plan->opts.gpu_device_id));
 
 	int M = d_plan->M;
 
@@ -273,7 +294,7 @@ int ALLOCGPUMEM2D_NUPTS(CUFINUFFT_PLAN d_plan)
 	}
 
         // Multi-GPU support: reset the device ID
-        cudaSetDevice(orig_gpu_device_id);
+        cudaSetDevice(select_valid_cuda_device(orig_gpu_device_id));
 
 	return 0;
 }
@@ -288,12 +309,16 @@ void FREEGPUMEMORY2D(CUFINUFFT_PLAN d_plan)
         // Mult-GPU support: set the CUDA Device ID:
         int orig_gpu_device_id;
         cudaGetDevice(& orig_gpu_device_id);
-        cudaSetDevice(d_plan->opts.gpu_device_id);
+        cudaSetDevice(select_valid_cuda_device(d_plan->opts.gpu_device_id));
 
 	if(!d_plan->opts.gpu_spreadinterponly){
 		checkCudaErrors(cudaFree(d_plan->fw));
 		checkCudaErrors(cudaFree(d_plan->fwkerhalf1));
 		checkCudaErrors(cudaFree(d_plan->fwkerhalf2));
+		#ifdef BINMTX_REAL_FFT
+		if (d_plan->fw_real) checkCudaErrors(cudaFree(d_plan->fw_real));
+		if (d_plan->fw_half) checkCudaErrors(cudaFree(d_plan->fw_half));
+		#endif
 	}
 	switch(d_plan->opts.gpu_method)
 	{
@@ -338,7 +363,7 @@ void FREEGPUMEMORY2D(CUFINUFFT_PLAN d_plan)
 		checkCudaErrors(cudaStreamDestroy(d_plan->streams[i]));
 
         // Multi-GPU support: reset the device ID
-        cudaSetDevice(orig_gpu_device_id);
+        cudaSetDevice(select_valid_cuda_device(orig_gpu_device_id));
 }
 
 int ALLOCGPUMEM3D_PLAN(CUFINUFFT_PLAN d_plan)
@@ -351,7 +376,7 @@ int ALLOCGPUMEM3D_PLAN(CUFINUFFT_PLAN d_plan)
         // Mult-GPU support: set the CUDA Device ID:
         int orig_gpu_device_id;
         cudaGetDevice(& orig_gpu_device_id);
-        cudaSetDevice(d_plan->opts.gpu_device_id);
+        cudaSetDevice(select_valid_cuda_device(d_plan->opts.gpu_device_id));
 
 	int nf1 = d_plan->nf1;
 	int nf2 = d_plan->nf2;
@@ -434,7 +459,7 @@ int ALLOCGPUMEM3D_PLAN(CUFINUFFT_PLAN d_plan)
 	}
 
         // Multi-GPU support: reset the device ID
-        cudaSetDevice(orig_gpu_device_id);
+        cudaSetDevice(select_valid_cuda_device(orig_gpu_device_id));
 
 	return 0;
 }
@@ -449,7 +474,7 @@ int ALLOCGPUMEM3D_NUPTS(CUFINUFFT_PLAN d_plan)
         // Mult-GPU support: set the CUDA Device ID:
         int orig_gpu_device_id;
         cudaGetDevice(& orig_gpu_device_id);
-        cudaSetDevice(d_plan->opts.gpu_device_id);
+        cudaSetDevice(select_valid_cuda_device(d_plan->opts.gpu_device_id));
 
 	int M = d_plan->M;
 
@@ -483,7 +508,7 @@ int ALLOCGPUMEM3D_NUPTS(CUFINUFFT_PLAN d_plan)
 	}
 
         // Multi-GPU support: reset the device ID
-        cudaSetDevice(orig_gpu_device_id);
+        cudaSetDevice(select_valid_cuda_device(orig_gpu_device_id));
 
 	return 0;
 }
@@ -497,7 +522,7 @@ void FREEGPUMEMORY3D(CUFINUFFT_PLAN d_plan)
         // Mult-GPU support: set the CUDA Device ID:
         int orig_gpu_device_id;
         cudaGetDevice(& orig_gpu_device_id);
-        cudaSetDevice(d_plan->opts.gpu_device_id);
+        cudaSetDevice(select_valid_cuda_device(d_plan->opts.gpu_device_id));
 
 
 	if(!d_plan->opts.gpu_spreadinterponly){
@@ -549,5 +574,5 @@ void FREEGPUMEMORY3D(CUFINUFFT_PLAN d_plan)
 		checkCudaErrors(cudaStreamDestroy(d_plan->streams[i]));
 
         // Multi-GPU support: reset the device ID
-        cudaSetDevice(orig_gpu_device_id);
+        cudaSetDevice(select_valid_cuda_device(orig_gpu_device_id));
 }

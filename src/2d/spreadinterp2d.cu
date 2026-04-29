@@ -57,6 +57,94 @@ void Spread_2d_NUptsdriven(FLT *x, FLT *y, CUCPX *c, CUCPX *fw, int M,
 
 }
 
+/* Kernels for NUptsdriven Method with Binary Matrix*/
+
+__global__
+void Spread_2d_NUptsdriven_Bin(FLT *x, FLT *y, CUCPX *c, CUCPX *fw, int M, 
+		const int ns, int nf1, int nf2, FLT es_c, FLT es_beta, int *idxnupts, 
+		int pirange)
+{
+	int xstart,ystart,xend,yend;
+	int xx, yy, ix, iy;
+	int outidx;
+	FLT ker1[MAX_NSPREAD];
+	FLT ker2[MAX_NSPREAD];
+
+	FLT x_rescaled, y_rescaled;
+	FLT kervalue1, kervalue2;
+
+	assert(c == nullptr); // this kernel is only for testing spreading with binmtx, so c should be null and all values in fw should be added by 1.0
+	for(int i=blockDim.x*blockIdx.x+threadIdx.x; i<M; i+=blockDim.x*gridDim.x){
+		x_rescaled=RESCALE(x[idxnupts[i]], nf1, pirange);
+		y_rescaled=RESCALE(y[idxnupts[i]], nf2, pirange);
+
+		xstart = ceil(x_rescaled - ns/2.0);
+		ystart = ceil(y_rescaled - ns/2.0);
+		xend = floor(x_rescaled + ns/2.0);
+		yend = floor(y_rescaled + ns/2.0);
+
+		FLT x1=(FLT)xstart-x_rescaled;
+		FLT y1=(FLT)ystart-y_rescaled;
+		eval_kernel_vec(ker1,x1,ns,es_c,es_beta);
+		eval_kernel_vec(ker2,y1,ns,es_c,es_beta);
+		for(yy=ystart; yy<=yend; yy++){
+			for(xx=xstart; xx<=xend; xx++){
+				ix = xx < 0 ? xx+nf1 : (xx>nf1-1 ? xx-nf1 : xx);
+				iy = yy < 0 ? yy+nf2 : (yy>nf2-1 ? yy-nf2 : yy);
+				outidx = ix+iy*nf1;
+				kervalue1=ker1[xx-xstart];
+				kervalue2=ker2[yy-ystart];
+				atomicAdd(&fw[outidx].x, kervalue1*kervalue2);
+			}
+		}
+
+	}
+
+}
+
+#ifdef BINMTX_REAL_FFT
+__global__
+void Spread_2d_NUptsdriven_Bin_Real(FLT *x, FLT *y, FLT *fw, int M,
+		const int ns, int nf1, int nf2, FLT es_c, FLT es_beta, int *idxnupts,
+		int pirange)
+{
+	int xstart, ystart, xend, yend;
+	int xx, yy, ix, iy;
+	int outidx;
+	FLT ker1[MAX_NSPREAD];
+	FLT ker2[MAX_NSPREAD];
+
+	FLT x_rescaled, y_rescaled;
+	FLT kervalue1, kervalue2;
+
+	for (int i = blockDim.x * blockIdx.x + threadIdx.x; i < M;
+		i += blockDim.x * gridDim.x) {
+		x_rescaled = RESCALE(x[idxnupts[i]], nf1, pirange);
+		y_rescaled = RESCALE(y[idxnupts[i]], nf2, pirange);
+
+		xstart = ceil(x_rescaled - ns / 2.0);
+		ystart = ceil(y_rescaled - ns / 2.0);
+		xend = floor(x_rescaled + ns / 2.0);
+		yend = floor(y_rescaled + ns / 2.0);
+
+		FLT x1 = (FLT)xstart - x_rescaled;
+		FLT y1 = (FLT)ystart - y_rescaled;
+		eval_kernel_vec(ker1, x1, ns, es_c, es_beta);
+		eval_kernel_vec(ker2, y1, ns, es_c, es_beta);
+		for (yy = ystart; yy <= yend; yy++) {
+			for (xx = xstart; xx <= xend; xx++) {
+				ix = xx < 0 ? xx + nf1 : (xx > nf1 - 1 ? xx - nf1 : xx);
+				iy = yy < 0 ? yy + nf2 : (yy > nf2 - 1 ? yy - nf2 : yy);
+				outidx = ix + iy * nf1;
+				kervalue1 = ker1[xx - xstart];
+				kervalue2 = ker2[yy - ystart];
+				atomicAdd(&fw[outidx], kervalue1 * kervalue2);
+			}
+		}
+	}
+}
+#endif
+
 __global__
 void Spread_2d_NUptsdriven_Horner(FLT *x, FLT *y, CUCPX *c, CUCPX *fw, int M, 
 	const int ns, int nf1, int nf2, FLT sigma, int* idxnupts, int pirange)

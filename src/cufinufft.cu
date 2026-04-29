@@ -14,6 +14,19 @@
 
 using namespace std;
 
+static int select_valid_cuda_device(int requested)
+{
+	int ndev = 0;
+	if (cudaGetDeviceCount(&ndev) != cudaSuccess || ndev <= 0)
+		return 0;
+	if (requested >= 0 && requested < ndev)
+		return requested;
+	int cur = 0;
+	if (cudaGetDevice(&cur) == cudaSuccess && cur >= 0 && cur < ndev)
+		return cur;
+	return 0;
+}
+
 void SETUP_BINSIZE(int type, int dim, cufinufft_opts *opts)
 {
 	switch(dim)
@@ -104,9 +117,9 @@ This performs:
         if (opts == NULL) {
             // options might not be supplied to this function => assume device
             // 0 by default
-            cudaSetDevice(0);
+		    cudaSetDevice(select_valid_cuda_device(0));
         } else {
-            cudaSetDevice(opts->gpu_device_id);
+		    cudaSetDevice(select_valid_cuda_device(opts->gpu_device_id));
         }
 
 	cudaEvent_t start, stop;
@@ -197,6 +210,17 @@ This performs:
 
 	cudaEventRecord(start);
 	cufftHandle fftplan;
+#ifdef BINMTX_REAL_FFT
+	cufftHandle fftplan_real = 0;
+	int n_real[] = {nf2, nf1};
+	int inembed_real[] = {nf2, nf1};
+	int onembed_real[] = {nf2, nf1 / 2 + 1};
+	cufftPlanMany(&fftplan_real, 2, n_real,
+		inembed_real, 1, nf1 * nf2,
+		onembed_real, 1, (nf1/2+1) * nf2,
+		CUFFT_TYPE_REAL, maxbatchsize);
+	d_plan->fftplan_real = fftplan_real;
+#else
 	switch(d_plan->dim)
 	{
 		case 1:
@@ -229,6 +253,7 @@ This performs:
 		break;
 	}
 	d_plan->fftplan = fftplan;
+#endif
 #ifdef TIME
 	cudaEventRecord(stop);
 	cudaEventSynchronize(stop);
@@ -267,7 +292,7 @@ This performs:
 	cudaFree(d_a);
 	cudaFree(d_f);
 	// Multi-GPU support: reset the device ID
-        cudaSetDevice(orig_gpu_device_id);
+	cudaSetDevice(select_valid_cuda_device(orig_gpu_device_id));
 
 	return ier;
 }
@@ -314,7 +339,7 @@ Notes: the type FLT means either single or double, matching the
         // Mult-GPU support: set the CUDA Device ID:
         int orig_gpu_device_id;
         cudaGetDevice(& orig_gpu_device_id);
-        cudaSetDevice(d_plan->opts.gpu_device_id);
+		cudaSetDevice(select_valid_cuda_device(d_plan->opts.gpu_device_id));
 
 
 	int nf1 = d_plan->nf1;
@@ -378,7 +403,7 @@ Notes: the type FLT means either single or double, matching the
 						d_plan->opts.gpu_method);
 
 					// Multi-GPU support: reset the device ID
-					cudaSetDevice(orig_gpu_device_id);
+					cudaSetDevice(select_valid_cuda_device(orig_gpu_device_id));
 
 					return 1;
 				}
@@ -390,7 +415,7 @@ Notes: the type FLT means either single or double, matching the
 						d_plan->opts.gpu_method);
 
 					// Multi-GPU support: reset the device ID
-					cudaSetDevice(orig_gpu_device_id);
+					cudaSetDevice(select_valid_cuda_device(orig_gpu_device_id));
 
 					return 1;
 				}
@@ -406,7 +431,7 @@ Notes: the type FLT means either single or double, matching the
 						d_plan->opts.gpu_method);
 
                                         // Multi-GPU support: reset the device ID
-                                        cudaSetDevice(orig_gpu_device_id);
+										cudaSetDevice(select_valid_cuda_device(orig_gpu_device_id));
 
 					return 1;
 				}
@@ -418,7 +443,7 @@ Notes: the type FLT means either single or double, matching the
 						d_plan->opts.gpu_method);
 
                                         // Multi-GPU support: reset the device ID
-                                        cudaSetDevice(orig_gpu_device_id);
+										cudaSetDevice(select_valid_cuda_device(orig_gpu_device_id));
 
 					return 1;
 				}
@@ -430,7 +455,7 @@ Notes: the type FLT means either single or double, matching the
 						d_plan->opts.gpu_method);
 
                                         // Multi-GPU support: reset the device ID
-                                        cudaSetDevice(orig_gpu_device_id);
+										cudaSetDevice(select_valid_cuda_device(orig_gpu_device_id));
 
 					return 1;
 				}
@@ -446,7 +471,7 @@ Notes: the type FLT means either single or double, matching the
 						d_plan->opts.gpu_method);
 
                                         // Multi-GPU support: reset the device ID
-                                        cudaSetDevice(orig_gpu_device_id);
+										cudaSetDevice(select_valid_cuda_device(orig_gpu_device_id));
 
 					return ier;
 				}
@@ -458,7 +483,7 @@ Notes: the type FLT means either single or double, matching the
 						d_plan->opts.gpu_method);
 
                                         // Multi-GPU support: reset the device ID
-                                        cudaSetDevice(orig_gpu_device_id);
+										cudaSetDevice(select_valid_cuda_device(orig_gpu_device_id));
 
 					return ier;
 				}
@@ -470,7 +495,7 @@ Notes: the type FLT means either single or double, matching the
 						d_plan->opts.gpu_method);
 
                                         // Multi-GPU support: reset the device ID
-                                        cudaSetDevice(orig_gpu_device_id);
+										cudaSetDevice(select_valid_cuda_device(orig_gpu_device_id));
 
 					return ier;
 				}
@@ -487,7 +512,7 @@ Notes: the type FLT means either single or double, matching the
 #endif
 
         // Multi-GPU support: reset the device ID
-        cudaSetDevice(orig_gpu_device_id);
+		cudaSetDevice(select_valid_cuda_device(orig_gpu_device_id));
 
 	return 0;
 }
@@ -518,7 +543,7 @@ int CUFINUFFT_EXECUTE(CUCPX* d_c, CUCPX* d_fk, CUFINUFFT_PLAN d_plan)
         // Mult-GPU support: set the CUDA Device ID:
         int orig_gpu_device_id;
         cudaGetDevice(& orig_gpu_device_id);
-        cudaSetDevice(d_plan->opts.gpu_device_id);
+		cudaSetDevice(select_valid_cuda_device(d_plan->opts.gpu_device_id));
 
 	int ier;
 	int type=d_plan->type;
@@ -563,7 +588,7 @@ int CUFINUFFT_EXECUTE(CUCPX* d_c, CUCPX* d_fk, CUFINUFFT_PLAN d_plan)
 	}
 
         // Multi-GPU support: reset the device ID
-        cudaSetDevice(orig_gpu_device_id);
+		cudaSetDevice(select_valid_cuda_device(orig_gpu_device_id));
 
 	return ier;
 }
@@ -582,7 +607,7 @@ int CUFINUFFT_DESTROY(CUFINUFFT_PLAN d_plan)
         // Mult-GPU support: set the CUDA Device ID:
         int orig_gpu_device_id;
         cudaGetDevice(& orig_gpu_device_id);
-        cudaSetDevice(d_plan->opts.gpu_device_id);
+		cudaSetDevice(select_valid_cuda_device(d_plan->opts.gpu_device_id));
 
 	cudaEvent_t start, stop;
 	cudaEventCreate(&start);
@@ -593,12 +618,16 @@ int CUFINUFFT_DESTROY(CUFINUFFT_PLAN d_plan)
 	// Can't destroy a Null pointer.
 	if(!d_plan) {
                 // Multi-GPU support: reset the device ID
-                cudaSetDevice(orig_gpu_device_id);
+		cudaSetDevice(select_valid_cuda_device(orig_gpu_device_id));
 		return 1;
         }
 
 	if(d_plan->fftplan)
 		cufftDestroy(d_plan->fftplan);
+	#ifdef BINMTX_REAL_FFT
+	if(d_plan->fftplan_real)
+		cufftDestroy(d_plan->fftplan_real);
+	#endif
 
 	switch(d_plan->dim)
 	{
@@ -632,7 +661,7 @@ int CUFINUFFT_DESTROY(CUFINUFFT_PLAN d_plan)
 	d_plan = NULL;
 
         // Multi-GPU support: reset the device ID
-        cudaSetDevice(orig_gpu_device_id);
+		cudaSetDevice(select_valid_cuda_device(orig_gpu_device_id));
 	return 0;
 }
 

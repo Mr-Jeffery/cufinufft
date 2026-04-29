@@ -359,7 +359,19 @@ int CUSPREAD2D_NUPTSDRIVEN(int nf1, int nf2, int M, CUFINUFFT_PLAN d_plan,
 	blocks.x = (M + threadsPerBlock.x - 1)/threadsPerBlock.x;
 	blocks.y = 1;
 	cudaEventRecord(start);
-	if(d_plan->opts.gpu_kerevalmeth){
+	if(d_c == nullptr){
+		for(int t=0; t<blksize; t++){
+			#ifdef BINMTX_REAL_FFT
+			Spread_2d_NUptsdriven_Bin_Real<<<blocks, threadsPerBlock>>>(d_kx,
+				d_ky, d_plan->fw_real + t*nf1*nf2, M, ns, nf1, nf2,
+				es_c, es_beta, d_idxnupts, pirange);
+			#else
+			Spread_2d_NUptsdriven_Bin<<<blocks, threadsPerBlock>>>(d_kx, d_ky,
+				nullptr, d_fw+t*nf1*nf2, M, ns, nf1, nf2, es_c, es_beta,
+				d_idxnupts, pirange);
+			#endif
+		}
+	}else if(d_plan->opts.gpu_kerevalmeth){
 		for(int t=0; t<blksize; t++){
 			Spread_2d_NUptsdriven_Horner<<<blocks, threadsPerBlock>>>(d_kx,
 				d_ky, d_c+t*M, d_fw+t*nf1*nf2, M, ns, nf1, nf2, sigma,

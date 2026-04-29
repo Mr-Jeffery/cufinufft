@@ -1,199 +1,142 @@
-PyPI package stats: ![PyPI - Downloads](https://img.shields.io/pypi/dm/cufinufft)
+# CSC 766 Final Project
 
-$$\text{\color{red} \Huge LEGACY CODEBASE}$$
+## Introduction
+In this project, a binary sparse matrix (in COO format) dedicated FFT algorithm is implemented and compared with the dense implementation with `cufft`. This project is based on [`flatironinstitute/cufinufft`](https://github.com/flatironinstitute/cufinufft), an FFT algorithm that is designed for Non-Uniform inputs/outputs on 1D/2D/3D. The original implementation is able to utilize the sparsity of the input, but falls short on utilizing the binary nature for faster computation.
 
-**Note**: This repository holds the legacy cuFINUFFT codebase. Further development will take place in the [FINUFFT](https://www.github.com/flatironinstitute/finufft) repository. Please direct any issues or pull requests to that repository.
+## Implementation & Modification
+- Dedicated spread implementation for binary sparse matrix, which significantly reduced the matrix transition time by eliminating the unnecessary matrix value transcation. Notice how `cnow` is defined inside the kernel instead of fetching from `*c`. By using wrapper, this kernel will only be called if `*c` is passed as `nullptr`.
+```c++
+/* ------------------------ 2d Spreading Kernels ----------------------------*/
+/* Kernels for NUptsdriven Method */
 
-# cuFINUFFT v1.3
+__global__
+void Spread_2d_NUptsdriven(FLT *x, FLT *y, CUCPX *c, CUCPX *fw, int M, 
+		const int ns, int nf1, int nf2, FLT es_c, FLT es_beta, int *idxnupts, 
+		int pirange)
+{
+	int xstart,ystart,xend,yend;
+	int xx, yy, ix, iy;
+	int outidx;
+	FLT ker1[MAX_NSPREAD];
+	FLT ker2[MAX_NSPREAD];
 
-<img align="right" src="docs/logo.png" width="350">
+	FLT x_rescaled, y_rescaled;
+	FLT kervalue1, kervalue2;
+	CUCPX cnow;
+	for(int i=blockDim.x*blockIdx.x+threadIdx.x; i<M; i+=blockDim.x*gridDim.x){
+		x_rescaled=RESCALE(x[idxnupts[i]], nf1, pirange);
+		y_rescaled=RESCALE(y[idxnupts[i]], nf2, pirange);
+		cnow = c[idxnupts[i]];
 
-cuFINUFFT is a very efficient GPU implementation of the 1-, 2-, and 3-dimensional nonuniform FFT of types 1 and 2, in single and double precision, based on the CPU code [FINUFFT][1].
+		xstart = ceil(x_rescaled - ns/2.0);
+		ystart = ceil(y_rescaled - ns/2.0);
+		xend = floor(x_rescaled + ns/2.0);
+		yend = floor(y_rescaled + ns/2.0);
 
-cuFINUFFT introduces several algorithmic innovations, including load-balancing, bin-sorting for cache-aware access, and use of fast shared memory.
-Our tests show an acceleration over FINUFFT of up to 10x on modern hardware,
-and up to 100x faster than other established GPU NUFFT codes:
+		FLT x1=(FLT)xstart-x_rescaled;
+		FLT y1=(FLT)ystart-y_rescaled;
+		eval_kernel_vec(ker1,x1,ns,es_c,es_beta);
+		eval_kernel_vec(ker2,y1,ns,es_c,es_beta);
+		for(yy=ystart; yy<=yend; yy++){
+			for(xx=xstart; xx<=xend; xx++){
+				ix = xx < 0 ? xx+nf1 : (xx>nf1-1 ? xx-nf1 : xx);
+				iy = yy < 0 ? yy+nf2 : (yy>nf2-1 ? yy-nf2 : yy);
+				outidx = ix+iy*nf1;
+				kervalue1=ker1[xx-xstart];
+				kervalue2=ker2[yy-ystart];
+				atomicAdd(&fw[outidx].x, cnow.x*kervalue1*kervalue2);
+				atomicAdd(&fw[outidx].y, cnow.y*kervalue1*kervalue2);
+			}
+		}
 
-<p align="center">
-<img src="docs/cufinufft_announce.png" width="550">
-</p>
+	}
 
-The linear transforms it can perform may be summarized as follows: type 1 maps nonuniform data (locations and corresponding strengths) to the uniformly spaced coefficients of a Fourier series (or its bi- or tri-variate generalization, according to dimension). Type 2 does the adjoint operation of type 1, ie maps in the reverse order.
-However, note that type 2 and type 1 are *not* generally each other's inverse,
-unlike for the FFT case!
-These transforms are performed to a user-presribed tolerance,
-at close-to-FFT speeds;
-under the hood, this involves detailed kernel design, custom spreading/interpolation stages, and plain FFTs performed by cuFFT.
-See the [documentation for FINUFFT][3] for a full mathematical description of the transforms and their applications to signal processing, imaging, and scientific computing.
+}
 
-**Note**: We are currently in the process of adapting the cuFINUFFT interface to closer match that of FINUFFT. This will likely break code depending on the current interface once the next release is published. At this point we will publish a migration guide that will detail the exact changes to the interfaces.
+/* Kernels for NUptsdriven Method with Binary Matrix*/
 
-Main developer: **Yu-hsuan Melody Shih** (NYU). Main other contributors:
-Garrett Wright (Princeton), Joakim Andén (KTH/Flatiron), Johannes Blaschke (LBNL), Alex Barnett (Flatiron).
-See github for full list of contributors.
-This project came out of Melody's 2018 and 2019 summer internships at the Flatiron Institute, advised by CCM project leader Alex Barnett.
+__global__
+void Spread_2d_NUptsdriven_Bin(FLT *x, FLT *y, CUCPX *c, CUCPX *fw, int M, 
+		const int ns, int nf1, int nf2, FLT es_c, FLT es_beta, int *idxnupts, 
+		int pirange)
+{
+	int xstart,ystart,xend,yend;
+	int xx, yy, ix, iy;
+	int outidx;
+	FLT ker1[MAX_NSPREAD];
+	FLT ker2[MAX_NSPREAD];
 
-## Installation
+	FLT x_rescaled, y_rescaled;
+	FLT kervalue1, kervalue2;
 
-Note for most Python users, you may skip to the [Python Package](#Python-Package) section first,
-and consider installing from source if that solution is not adequate for your needs. Note that 1D is not available in Python yet. Here's the C++ install process:
+	assert(c == nullptr); // this kernel is only for testing spreading with binmtx, so c should be null and all values in fw should be added by 1.0
+	for(int i=blockDim.x*blockIdx.x+threadIdx.x; i<M; i+=blockDim.x*gridDim.x){
+		x_rescaled=RESCALE(x[idxnupts[i]], nf1, pirange);
+		y_rescaled=RESCALE(y[idxnupts[i]], nf2, pirange);
 
- - Make sure you have the prerequisites: a C++ compiler (eg `g++`) and a recent CUDA installation (`nvcc`).
- - Get the code: `git clone https://github.com/flatironinstitute/cufinufft.git`
- - Review the `Makefile`: If you need to customize build settings, create and edit a `make.inc`.  Example:
-   - To override the standard CUDA `/usr/local/cuda` location your `make.inc` should contain: `CUDA_ROOT=/your/path/to/cuda`.
-   - For examples, see one for IBM machines (`targets/make.inc.power9`), and another for the Courant Institute cluster (`sites/make.inc.CIMS`).
- - Compile: `make all -j` (this takes several minutes)
- - Run test codes: `make check` which should complete in less than a minute without error.
- - You may then want to try individual test drivers, such as `bin/cufinufft2d1_test_32 2 1e3 1e3 1e7 1e-3` which tests the single-precision 2D type 1. Most such executables document their usage when called with no arguments.
+		xstart = ceil(x_rescaled - ns/2.0);
+		ystart = ceil(y_rescaled - ns/2.0);
+		xend = floor(x_rescaled + ns/2.0);
+		yend = floor(y_rescaled + ns/2.0);
 
+		FLT x1=(FLT)xstart-x_rescaled;
+		FLT y1=(FLT)ystart-y_rescaled;
+		eval_kernel_vec(ker1,x1,ns,es_c,es_beta);
+		eval_kernel_vec(ker2,y1,ns,es_c,es_beta);
+		for(yy=ystart; yy<=yend; yy++){
+			for(xx=xstart; xx<=xend; xx++){
+				ix = xx < 0 ? xx+nf1 : (xx>nf1-1 ? xx-nf1 : xx);
+				iy = yy < 0 ? yy+nf2 : (yy>nf2-1 ? yy-nf2 : yy);
+				outidx = ix+iy*nf1;
+				kervalue1=ker1[xx-xstart];
+				kervalue2=ker2[yy-ystart];
+				atomicAdd(&fw[outidx].x, kervalue1*kervalue2);
+			}
+		}
 
-## Basic usage and interface
+	}
 
-Please see the codes in `examples/` to see how to call cuFINUFFT
-and link to from C++/CUDA, and to call from Python.
-
-The default use of the cuFINUFFT API has four stages, that match
-those of the plan interface to FINUFFT (in turn modeled on those of,
-eg, FFTW or NFFT). Here they are from C++:
-1. Plan one transform, or a set of transforms sharing nonuniform points, specifying overall dimension, numbers of Fourier modes, etc:
-
-    ```c++
-    ier = cufinufft_makeplan(type, dim, nmodes, iflag, ntransf, tol, maxbatchsize, &plan, NULL);
-    ```
-
-1. Set the locations of nonuniform points from the arrays `x`, `y`, and possibly `z`: 
-
-    ```c++
-    ier = cufinufft_setpts(M, x, y, z, 0, NULL, NULL, NULL, plan);
-    ```
-
-   (Note that here arguments 5-8 are reserved for future type 3 implementation, to match the FINUFFT interface).
-1. Perform the transform(s) using these nonuniform point arrays, which reads strengths `c` and writes into modes `fk` for type 1, or vice versa for type 2:
-
-    ```c++
-    ier = cufinufft_execute(c, fk, plan);
-    ```
-
-1. Destroy the plan (clean up):
-
-    ```c++
-    ier = cufinufft_destroy(plan);
-    ```
-
-In each case the returned integer `ier` is a status indicator.
-Here is [the full C++ documentation](docs/cppdoc.md).
-
-It is also possible to change advanced options by changing the last `NULL`
-argument of the `cufinufft_makeplan` call to a pointer
-to an options struct, `opts`.
-This struct should first be initialized via
-```cufinufft_default_opts(type, dim, &opts);```
-before the user changes any fields.
-For examples of this advanced usage, see `test/cufinufft*.cu`
-
-
-## Library installation
-
-It is up to the user to decide how exactly to link or otherwise install the libraries produced in `lib`.
-If you plan to use the Python wrapper you will minimally need to extend your `LD_LIBRARY_PATH`,
-such as with `export LD_LIBRARY_PATH=${PWD}/lib:${LD_LIBRARY_PATH}` or a more permanent installation
-path of your choosing.
-
-If you would like to always have this installation in your library path, you can add to your shell rc
-with something like the following:
-
-`echo "\n# cufinufft librarypath \nexport LD_LIBRARY_PATH=${PWD}/lib:${LD_LIBRARY_PATH}" >> ~/.bashrc`
-
-Because CUDA itself has similar library/path requirements, it is expected the user is somewhat familiar.
-If not, please ask, we might be able to help.
-
-
-## Python wrapper
-
-For those installing from source, this code comes with a Python wrapper module `cufinufft`, which depends on `pycuda`.
-Once you have successfully installed and tested the CUDA library,
-you may run `make python` to manually install the additional Python package.
-
-### Python package
-
-General Python users, or Python software packages which would like to automatically
-depend on cufinufft using `setuptools` may use a precompiled binary distribution.
-This totally avoids installing from source and managing libraries for supported systems.
-
-Binary distributions are specific to both hardware and software. We currently provide binary wheels targeting Linux systems covered by `manylinux2010` for CUDA 10 forward with compatible GPUs.  If you have such a system, you may run:
-
-`pip install cufinufft`
-
-For other cases, the Python wrapper should be able to be built from source.
- 
-## Advanced topics
-
-### Advanced Makefile Usage
-
-If you want to test/benchmark the spreader and interpolator
-(the performance-critical components of the NUFFT algorithm),
-without building the whole library, do this with `make checkspread`.
-
-In general for make tasks,
-it's possible to specify the target architecture using the `target` variable, eg:
-```
-make target=power9 -j
-```
-By default, the makefile assumes the `x86_64` architecture. We've included
-site-specific configurations -- such as Cori at NERSC, or Summit at OLCF --
-which can be accessed using the `site` variable, eg:
-```
-make site=olcf_summit
+}
 ```
 
-The currently supported targets and sites are:
-1. Sites
-    1. NERSC Cori (`site=nersc_cori`)
-    1. NERSC Cori GPU (`site=nersc_cgpu`)
-    1. OLCF Summit (`site=olcf_summit`) -- automatically sets `target=power9`
-    1. CIMS (`site=CIMS`)
-    1. Flatiron Institute, rusty cluster GPU node (`site=FI`)
-1. Targets
-    1. Default (`x86_64`) -- do not specify `target` variable
-    1. IBM `power9` (`target=power9`)
+## Installation & Run Guide
+For `double` precision, run
+```bash
+make -j4 bin/cufinufft2d1_binmtx_test bin/cufft_dense2d_test
+export CUDA_ROOT=$(dirname "$(dirname "$(command -v nvcc)")")
+export LD_LIBRARY_PATH="$CUDA_ROOT/lib64:${LD_LIBRARY_PATH}"
+./bin/cufinufft2d1_binmtx_test 1 benzene.mtx
+./bin/cufft_dense2d_test benzene_dense_real.mtx
+```
+For `single` precision, run
+```bash
+make -j4 bin/cufinufft2d1_binmtx_test bin/cufft_dense2d_test
+export CUDA_ROOT=$(dirname "$(dirname "$(command -v nvcc)")")
+export LD_LIBRARY_PATH="$CUDA_ROOT/lib64:${LD_LIBRARY_PATH}"
+./bin/cufinufft2d1_binmtx_test_32 1 benzene.mtx
+./bin/cufft_dense2d_test_32 benzene_dense_real.mtx
+```
 
-A general note about expanding the platform support: _targets_ should contain
-settings that are specific to a compiler/hardware architecture, whereas _sites_
-should contain settings that are specific to a HPC facility's software
-environment. The `site`-specific script is loaded __before__ the
-`target`-specific settings, hence it is possible to specify a target in a site
-`make.inc.*` (but not the other way around).
+## Performance Analysis
+Benchmark environment:
+- OS: Ubuntu 24.04.3 LTS on Windows 10 x86_64 under WSL2
+- CPU: 12th Gen Intel i9-12900HX (24 cores)
+- GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+- NVIDIA driver: 572.83
+- CUDA version reported by `nvidia-smi`: 12.8
 
+The benzene benchmark shows that the COO-based sparse path is faster end-to-end than the dense cuFFT baseline, mainly because it avoids materializing and transforming the full dense grid. The sparse path is strongest in total runtime, while the dense path is still slightly ahead in pure FFT execution throughput.
 
-### Makefile preprocessors
- - TIME - timing for each stage.  Enable by adding "-DTIME" to `NVCCFLAGS`.
- - SPREADTIME - more detailed timing from spreading and interpolation
- - DEBUG - debug mode outputs all the middle stages' result
- 
-### Other notes
- - If you are interested in optimizing for GPU Compute Capability,
- you may want to specify ```NVARCH=-arch=sm_XX``` in your make.inc to reduce compile times,
- or for other performance reasons. See [Matching SM Architectures][2].
+| Method | Precision | Total time | Exec-only throughput | Relative error |
+| --- | --- | ---: | ---: | ---: |
+| Sparse bin-matrix | Single | 0.752 s | 8.36e+05 NU pts/s | 8.49e-07 |
+| Dense cuFFT | Single | 6.41 s | 9.59e+05 NU pts/s | 5.39e-04 |
+| Sparse bin-matrix | Double | 2.9 s | 8.76e+04 NU pts/s | 3.24e-16 |
+| Dense cuFFT | Double | 10.5 s | 1.21e+05 NU pts/s | 2.36e-12 |
 
-## Tasks for developers
+From these runs, the sparse implementation is about 8.5x faster overall in single precision and about 3.6x faster overall in double precision. The dense path still reaches higher exec-only throughput in both precisions, which suggests the win for the sparse version comes primarily from lower data movement, reduced setup overhead, and less work before and after the FFT. See the measured runs in [complex32.txt](complex32.txt), [complex64.txt](complex64.txt), [dense32.txt](dense32.txt), and [dense64.txt](dense64.txt).
 
-- 1D version is close to finished (needs vectorized testers and Py interfaces)
-- Type 3 transforms (which are quite tricky) as in [FINUFFT][1] are in progress (at least in 3D) on a PR, thanks to Simon Frasch; please go and test!
-- We need some more tutorial examples in C++ and Python
-- Please help us to write MATLAB (gpuArray) and Julia interfaces
-- There are various Tensorflow and related interfaces in progress (please help with them or test them): https://github.com/mrphys/tensorflow-nufft  https://github.com/dfm/jax-finufft
-- Please see Issues and PRs for other things you can help fix or test
-
-
-## References
-
-* cuFINUFFT: a load-balanced GPU library for general-purpose nonuniform FFTs,
-Yu-hsuan Shih, Garrett Wright, Joakim Andén, Johannes Blaschke, Alex H. Barnett,
-PDSEC2021 conference (*best paper prize*). https://arxiv.org/abs/2102.08463
-
-
-[1]: https://github.com/flatironinstitute/finufft
-[2]: http://arnon.dk/matching-sm-architectures-arch-and-gencode-for-various-nvidia-cards/
-[3]: https://finufft.readthedocs.io
-
+## Limitation & Unsuccessful Attempts
+Due to limited time, there are some promising optimization direction:
+- Changing the execution kernel `CUFFT_EX` to a customized kernel did not work, because the `cuFFTExecZ2Z()` and `cuFFTExecC2C()` are highly optimized, simply using a sparse binary FFT can not leverage the lack of optimization.
+- Changing `cuFFTExecZ2Z()` and `cuFFTExecC2C()` to `cuFFTExecD2Z()` and `cuFFTExecR2C()` also did not work, which is against the claim on CUFFT documentation. Even though we can reduce the input to real matrix and drop half of the size, they are still slower than the complex-to-complex implementation. We assume this is due to the lack of optimization.
