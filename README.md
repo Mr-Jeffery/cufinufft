@@ -100,6 +100,10 @@ void Spread_2d_NUptsdriven_Bin(FLT *x, FLT *y, CUCPX *c, CUCPX *fw, int M,
 ```
 
 ## Installation & Run Guide
+First download the matrix from matrix market, and run the python script to transform COO format to dense format:
+```bash
+python3 test/mtx_coo_to_dense_real.py benzene.mtx benzene_dense_real.mtx
+```
 For `double` precision, run
 ```bash
 make -j4 bin/cufinufft2d1_binmtx_test bin/cufft_dense2d_test
